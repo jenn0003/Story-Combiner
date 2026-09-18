@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StoryMaps Sidecar Consolidator</title>
+<style>
+:root{color-scheme:dark;--bg:#101817;--panel:#182321;--panel2:#20302c;--line:#38524c;--text:#eef8f4;--muted:#a8beb7;--accent:#66d2c3;--danger:#ff9b9b;--shadow:0 12px 28px #0005}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#0b1211,#14211f);color:var(--text);font:15px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1180px;margin:auto;padding:28px 20px 60px}h1{margin:0 0 4px;font-size:30px}h2{font-size:19px;margin:0 0 10px}p{margin:5px 0;color:var(--muted)}.panel{background:#182321dd;border:1px solid var(--line);border-radius:14px;padding:16px;margin:14px 0;box-shadow:var(--shadow)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}label{display:grid;gap:4px;color:var(--muted);font-size:13px}input{width:100%;background:#0e1615;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit}button{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:8px;padding:10px 14px;cursor:pointer;font:inherit}button:hover{border-color:var(--accent)}button.primary{background:#287d73;border-color:#66d2c3;font-weight:650}button.danger{border-color:#9e5e5e;color:#ffd0d0}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}.status{margin-top:12px;min-height:22px;color:var(--muted)}.status.ok{color:var(--accent)}.status.error{color:var(--danger)}.hidden{display:none!important}.story-meta{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:13px}.sidecars{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}.sidecar{background:#111b19;border:1px solid var(--line);border-radius:11px;padding:14px;cursor:grab}.sidecar.parent{border:2px solid var(--accent);background:#173934}.sidecar.dragging{opacity:.45}.sidecar h3{margin:0 0 5px;font-size:16px}.sidecar small{color:var(--muted);display:block}.sidecar .badge{display:inline-block;margin-top:10px;padding:3px 7px;border-radius:999px;background:#2a4540;color:var(--accent);font-size:12px}.order-list{display:grid;gap:8px;margin-top:10px}.order-row{display:flex;align-items:center;gap:10px;background:#111b19;border:1px solid var(--line);border-radius:8px;padding:10px}.order-row.parent{border-color:var(--accent);background:#173934}.order-row strong{flex:0 0 24px;color:var(--accent)}.order-row>span{flex:1;min-width:0}.order-controls{display:flex;flex:0 0 auto;gap:4px;margin-left:auto}.order-row button{margin-left:0;padding:4px 8px}.warning{border-color:#896a38;background:#302817;color:#f4d99c}.danger-note{color:var(--danger)}code{color:#c9eee7}details{margin-top:12px;color:var(--muted)}summary{cursor:pointer;color:var(--text)}@media(max-width:600px){main{padding:20px 12px}.panel{padding:14px}}
+.slide-list{display:grid;gap:6px;margin-top:11px;border-top:1px solid #29413c;padding-top:9px}.slide-preview{display:flex;min-width:0;font-size:12px;color:var(--muted)}.slide-preview b{flex:0 0 auto;color:var(--accent);font-weight:600;margin-right:5px}.slide-preview .slide-text{display:block;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.more-slides{font-size:12px;color:#78958d}
+.item-id-list{display:grid;gap:5px}.item-id-row{display:flex;gap:5px}.item-id-row input{min-width:0}.item-id-row button{padding:5px 9px}.output-mode{display:grid;gap:6px;margin:12px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;color:var(--muted)}.output-mode legend{padding:0 4px;color:var(--text);font-size:13px}.output-mode label{display:flex;align-items:center;gap:7px}.output-mode input{width:auto}
+</style>
+</head>
+<body>
+<main>
+<h1>StoryMaps Sidecar Consolidator</h1>
+<p>Choose a StoryMaps item, keep one sidecar, and merge the other sidecars into it in the order you arrange.</p>
+
+<section class="panel">
+<h2>1. Sign in and choose a story</h2>
+<div class="grid">
+<label>Portal host<input id="portal" value="https://www.arcgis.com" spellcheck="false"></label>
+<label>OAuth client ID<input id="clientId" value="arcgisstorymaps" spellcheck="false"></label>
+<label>OAuth redirect URI<input id="redirectUri" spellcheck="false"></label>
+<label>Story item IDs<div id="itemIds" class="item-id-list"></div></label>
+</div>
+<div class="actions"><button id="addItemId" type="button">+ Add Story ID</button></div>
+<div class="actions"><button id="login" class="primary">Sign in with ArcGIS</button><button id="load" class="primary" disabled>Load draft story</button><button id="logout">Clear session</button></div>
+<div id="authStatus" class="status">Not signed in.</div>
+<div id="storyMeta" class="story-meta hidden"></div>
+<details open><summary>Authentication note</summary><p>The redirect URI must be registered on the OAuth application. The default <code>arcgisstorymaps</code> client belongs to StoryMaps and will reject this local tool's URL. Create or use an ArcGIS OAuth application that allows this exact redirect URI, then enter its client ID above. Serving this file from a local HTTP server is more reliable than opening it as <code>file://</code>.</p></details>
+<details><summary>Detailed: create the OAuth user-login item</summary>
+<ol>
+<li>Serve this file locally, if needed: <code>python3 -m http.server 8000</code> from its folder, then open <code>http://localhost:8000/sidecar-consolidator.html</code>.</li>
+<li>Sign in to the target ArcGIS Online or ArcGIS Enterprise portal with an account allowed to create developer credentials.</li>
+<li>Open <strong>Content</strong> → <strong>My content</strong> → <strong>New item</strong> → <strong>Developer credentials</strong>.</li>
+<li>Select <strong>OAuth 2.0 credentials</strong>, then choose the user-authentication/browser application environment when prompted.</li>
+<li>For <strong>Redirect URLs</strong>, add the exact URL where this file is running. For the local example, use <code>http://localhost:8000/sidecar-consolidator.html</code>. Click <strong>Add</strong>.</li>
+<li>Give the credential item a recognizable title, such as <code>StoryMaps Sidecar Consolidator</code>, and create/save it.</li>
+<li>Open the new credential item and copy its <strong>Client ID</strong> into this tool’s <strong>OAuth client ID</strong> field. This browser-only flow does not need a client secret; never paste a client secret into this HTML.</li>
+<li>Set the tool’s <strong>Portal host</strong> to the same portal that owns the credential item, and make sure the redirect URI field matches the registered value character-for-character.</li>
+<li>Click <strong>Sign in with ArcGIS</strong>, approve the login, then enter one or more Story item IDs and click <strong>Load draft story</strong>.</li>
+</ol>
+<p>If the portal does not show Developer credentials, the account or organization may not have the required privilege. Use the organization’s approved developer-credential workflow or ask an administrator.</p>
+</details>
+</section>
+
+<section id="arrangement" class="panel hidden">
+<h2>2. Arrange the sidecars</h2>
+<p>Drag cards or use the arrows. The top card is the parent; all cards below it contribute slides in order.</p>
+<div id="order" class="order-list"></div>
+<fieldset class="output-mode"><legend>Output mode</legend><label><input type="radio" name="outputMode" value="merged" checked> Add all sidecars into one sidecar</label><label><input type="radio" name="outputMode" value="separated"> Add each sidecar separately with a separator block in the same story</label></fieldset>
+<div class="actions"><button id="save" class="danger">Create new StoryMap</button></div>
+<div id="mergeStatus" class="status"></div>
+</section>
+
+<details id="workspace" class="panel hidden">
+<summary>3. Inspect sidecar details</summary>
+<p>The sidecar at the top of the arrangement will be retained as the parent. Review slide text and alt text here if you need more context.</p>
+<div id="sidecars" class="sidecars"></div>
+</details>
+
+
+</main>
+<script>
+(() => {
+  'use strict';
+  const state = { token: null, portal: '', clientId: '', items: [], item: null, draft: null, draftResource: null, sidecars: [], parentId: null, order: [], outputItem: null };
+  const $ = (id) => document.getElementById(id);
+  const setStatus = (el, text, kind = '') => { el.textContent = text; el.className = `status ${kind}`; };
+  function addItemIdInput(value = '') {
+    const row = document.createElement('div'); row.className = 'item-id-row';
+    const input = document.createElement('input'); input.placeholder = '32-character item ID'; input.spellcheck = false; input.value = value;
+    const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '−'; remove.title = 'Remove Story ID';
+    remove.onclick = () => { if ($('itemIds').children.length > 1) { row.remove(); persistItemIds(); } };
+    input.oninput = persistItemIds; row.append(input, remove); $('itemIds').append(row);
+  }
+  function readItemIds() { return [...$('itemIds').querySelectorAll('input')].map((input) => input.value.trim()).filter(Boolean); }
+  function persistItemIds() { localStorage.setItem('smx-sidecar-item-ids', JSON.stringify(readItemIds())); }
+  const portalRoot = () => $('portal').value.trim().replace(/\/$/, '');
+  const restRoot = () => `${portalRoot()}/sharing/rest`;
+  const withAuth = (url, params = {}) => { const p = new URLSearchParams({ f: 'json', ...params }); if (state.token) p.set('token', state.token); return `${url}${url.includes('?') ? '&' : '?'}${p}`; };
+  const api = async (url, options = {}) => { const response = await fetch(url, options); const text = await response.text(); let data; try { data = JSON.parse(text); } catch { throw new Error(`ArcGIS returned non-JSON (${response.status}).`); } if (!response.ok || data.error) throw new Error(data.error?.message || `ArcGIS request failed (${response.status}).`); return data; };
+  const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function handleOAuthCallback() {
+    const query = new URLSearchParams(location.search);
+    if (query.get('error')) setStatus($('authStatus'), `ArcGIS OAuth error: ${query.get('error_description') || query.get('error')}`, 'error');
+    if (!location.hash.includes('access_token')) return;
+    const params = new URLSearchParams(location.hash.slice(1));
+    const token = params.get('access_token');
+    if (token) { state.token = token; sessionStorage.setItem('smx-sidecar-token', token); history.replaceState(null, '', location.href.split('#')[0]); }
+  }
+  function updateAuthUi() { $('load').disabled = !state.token; setStatus($('authStatus'), state.token ? 'Signed in for this browser session.' : 'Not signed in.', state.token ? 'ok' : ''); }
+  $('login').onclick = () => {
+    const redirect = $('redirectUri').value.trim() || location.href.split('#')[0];
+    $('redirectUri').value = redirect;
+    if (!$('clientId').value.trim() || $('clientId').value.trim() === 'arcgisstorymaps') { setStatus($('authStatus'), 'Use an OAuth application whose registered redirect URI exactly matches the value shown above.', 'error'); return; }
+    if (location.protocol === 'file:') setStatus($('authStatus'), 'Opening OAuth from file:// may be rejected. If it fails, serve this HTML from a local HTTP server.', 'error');
+    const params = new URLSearchParams({ client_id: $('clientId').value.trim(), response_type: 'token', expiration: '120', redirect_uri: redirect, state: crypto.randomUUID() });
+    location.href = `${restRoot()}/oauth2/authorize?${params}`;
+  };
+  $('logout').onclick = () => { state.token = null; sessionStorage.removeItem('smx-sidecar-token'); state.items = []; state.item = state.draft = state.outputItem = null; $('workspace').classList.add('hidden'); $('arrangement').classList.add('hidden'); updateAuthUi(); };
+  $('addItemId').onclick = () => { addItemIdInput(); persistItemIds(); $('itemIds').lastElementChild.querySelector('input').focus(); };
+
+  function nodeText(node) {
+    const found = [];
+    const visit = (value) => { if (!value) return; if (typeof value === 'string' && value.trim().length > 2) found.push(value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()); else if (Array.isArray(value)) value.forEach(visit); else if (typeof value === 'object') Object.entries(value).forEach(([key, child]) => { if (!['url','alt','image','video','map','id'].includes(key)) visit(child); }); };
+    visit(node?.data); return found.slice(0, 2).join(' · ') || 'Untitled sidecar';
+  }
+  function sidecarLabel(sidecar) {
+    const nodes = state.draft?.nodes || {};
+    const queue = [...(sidecar.slides || [])];
+    while (queue.length) {
+      const id = queue.shift(); const node = nodes[id]; if (!node) continue;
+      if (node.type === 'text' && ['h2', 'h3', 'h4'].includes(node.data?.type) && node.data?.text) {
+        const heading = node.data.text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (heading) return heading.length > 72 ? `${heading.slice(0, 69)}…` : heading;
+      }
+      if (Array.isArray(node.children)) queue.push(...node.children);
+    }
+    const fallback = nodeText(sidecar.node);
+    return fallback.length > 72 ? `${fallback.slice(0, 69)}…` : fallback;
+  }
+  function slideSummary(slideId) {
+    const nodes = state.draft?.nodes || {}; const queue = [{ id: slideId, inNarrative: false }]; const text = []; const alt = []; const media = [];
+    while (queue.length) {
+      const current = queue.shift(); const node = nodes[current.id]; if (!node) continue;
+      const inNarrative = current.inNarrative || node.type === 'immersive-narrative-panel';
+      if (node.type === 'text' && inNarrative && node.data?.text) {
+        const value = node.data.text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (value) text.push({ heading: ['h2', 'h3', 'h4'].includes(node.data.type), value });
+      } else if (node.type && !['immersive-slide', 'immersive-narrative-panel', 'immersive-media-panel'].includes(node.type)) {
+        media.push(node.type.replace(/^immersive-/, '').replace(/-/g, ' '));
+        const altText = [node.data?.alt, node.data?.altText, node.data?.accessibility?.altText, node.data?.accessibility?.alt]
+          .find((value) => typeof value === 'string' && value.trim());
+        if (altText) alt.push(altText.replace(/\s+/g, ' ').trim());
+      }
+      if (Array.isArray(node.children)) node.children.forEach((id) => queue.push({ id, inNarrative }));
+    }
+    const preferred = text.find((entry) => entry.heading) || text[0];
+    const trim = (value, length = 100) => value.length > length ? `${value.slice(0, length - 3)}…` : value;
+    return { text: preferred ? trim(preferred.value) : '', alt: alt.length ? trim([...new Set(alt)].join(' · ')) : '', media: [...new Set(media)].slice(0, 2).join(', ') };
+  }
+  function slidePreviews(sidecar) {
+    const visible = sidecar.slides.slice(0, 4).map((slideId, index) => { const summary = slideSummary(slideId); const content = summary.text ? `${summary.text}${summary.alt ? ` · Alt: ${summary.alt}` : ''}` : summary.alt ? `Alt: ${summary.alt}` : summary.media ? `Media: ${summary.media}` : 'No text or media preview'; return `<div class="slide-preview"><b>${index + 1}.</b><span class="slide-text">${escapeHtml(content)}</span></div>`; }).join('');
+    const remaining = sidecar.slides.length > 4 ? `<div class="more-slides">+ ${sidecar.slides.length - 4} more slide${sidecar.slides.length - 4 === 1 ? '' : 's'}</div>` : '';
+    return `<div class="slide-list">${visible}${remaining}</div>`;
+  }
+  function getSidecars(draft) {
+    const nodes = draft?.nodes || {};
+    return Object.entries(nodes).filter(([, node]) => node?.type === 'immersive' && (node.data?.type === 'sidecar' || node.data?.type === undefined)).map(([id, node]) => ({ id, node, slides: Array.isArray(node.children) ? node.children.slice() : [] }));
+  }
+  function renderSidecars() {
+    $('sidecars').innerHTML = state.sidecars.map((s, i) => `<article class="sidecar ${s.id === state.parentId ? 'parent' : ''}" data-id="${escapeHtml(s.id)}"><h3>${escapeHtml(sidecarLabel(s))}</h3><small>ID: ${escapeHtml(s.id)}</small><small>${s.slides.length} slide${s.slides.length === 1 ? '' : 's'}</small>${slidePreviews(s)}${s.id === state.parentId ? '<span class="badge">Parent — retained</span>' : ''}</article>`).join('');
+  }
+  function renderOrder() {
+    $('order').innerHTML = state.order.map((id, i) => { const s = state.sidecars.find(x => x.id === id); const summary = slideSummary(s.slides[0]); return `<div class="order-row ${i === 0 ? 'parent' : ''}" draggable="true" data-id="${escapeHtml(id)}"><strong>${i + 1}</strong><span>${escapeHtml(sidecarLabel(s))}${i === 0 ? ' · Parent' : ''}<br><small>${escapeHtml(summary.text || (summary.alt ? `Alt: ${summary.alt}` : summary.media ? `Media: ${summary.media}` : 'No slide preview'))}</small></span><div class="order-controls"><button data-move="up" aria-label="Move up">↑</button><button data-move="down" aria-label="Move down">↓</button></div></div>`; }).join('');
+    document.querySelectorAll('.order-row').forEach((row) => { row.ondragstart = () => { row.classList.add('dragging'); }; row.ondragend = () => row.classList.remove('dragging'); row.ondragover = (e) => e.preventDefault(); row.ondrop = () => { const from = state.order.indexOf(document.querySelector('.dragging')?.dataset.id); const to = state.order.indexOf(row.dataset.id); if (from >= 0 && to >= 0) { const [moved] = state.order.splice(from, 1); state.order.splice(to, 0, moved); state.parentId = state.order[0]; renderSidecars(); renderOrder(); } }; });
+    document.querySelectorAll('[data-move]').forEach((button) => button.onclick = (e) => { e.stopPropagation(); const row = button.closest('.order-row'); const from = state.order.indexOf(row.dataset.id); const to = button.dataset.move === 'up' ? from - 1 : from + 1; if (to >= 0 && to < state.order.length) { [state.order[from], state.order[to]] = [state.order[to], state.order[from]]; state.parentId = state.order[0]; renderSidecars(); renderOrder(); } });
+  }
+  function normalizeNavigationNodes(draft) {
+    const root = draft.nodes[draft.root];
+    const navIds = Object.entries(draft.nodes)
+      .filter(([,node]) => node && node.type === 'navigation')
+      .map(([id]) => id);
+
+    if (!navIds.length) return draft;
+
+    const primary = navIds[0];
+    draft.nodes[primary].config = {
+      ...(draft.nodes[primary].config || {}),
+      isHidden: false
+    };
+
+    navIds.slice(1).forEach(id => {
+      delete draft.nodes[id];
+      if (Array.isArray(root.children)) {
+        root.children = root.children.filter(c => c !== id);
+      }
+    });
+
+    if (Array.isArray(root.children)) {
+      root.children = root.children.filter(c => c !== primary);
+      const coverIdx = root.children.findIndex(id => draft.nodes[id]?.type === 'storycover');
+      root.children.splice(coverIdx >= 0 ? coverIdx + 1 : 0, 0, primary);
+    }
+    return draft;
+  }
+
+
+  function hideCredits(draft) {
+    Object.values(draft.nodes || {}).forEach((node) => {
+      if (node?.type === 'credits') {
+        node.config = { ...(node.config || {}), isHidden: true };
+      }
+    });
+    return draft;
+  }
+  function applyTheme(draft) {
+    draft.resources = draft.resources || {};
+    draft.resources["r-vlc4Kp"] = {
+      type: "story-theme",
+      data: {
+        themeId: "summit",
+        themeBaseVariableOverrides: {},
+        themeItemId: "5ef34cb6747d49fd95026ec02be63feb"
+      }
+    };
+    if (draft.nodes?.[draft.root]) {
+      draft.nodes[draft.root].data = draft.nodes[draft.root].data || {};
+      draft.nodes[draft.root].data.storyTheme = "r-vlc4Kp";
+    }
+    return draft;
+  }
+
+  function ensureEndSeparator(draft) {
+    const root = draft.nodes[draft.root];
+    const existing = Object.entries(draft.nodes).find(([id,node]) => node?.type==='separator' && node?.data?.generatedBy==='sidecar-consolidator-end');
+    if (!existing) {
+      const sid = `separator-end-${Date.now()}`;
+      draft.nodes[sid] = {type:'separator',data:{generatedBy:'sidecar-consolidator-end'}};
+      const creditsIdx = root.children.findIndex(id => draft.nodes[id]?.type === 'credits');
+      root.children.splice(creditsIdx >= 0 ? creditsIdx : root.children.length,0,sid);
+    }
+    return draft;
+  }
+
+  function buildMergedDraft() {
+    state.parentId = state.order[0]; const parent = state.sidecars.find(s => s.id === state.parentId); if (!parent) throw new Error('Arrange at least one sidecar.');
+    const draft = structuredClone(state.draft); const separated = document.querySelector('input[name="outputMode"]:checked')?.value === 'separated'; const rootChildren = draft.nodes[draft.root]?.children;
+    if (separated) {
+      if (!Array.isArray(rootChildren)) throw new Error('The draft does not have a valid story root.');
+      const sidecarIds = new Set(state.sidecars.map((sidecar) => sidecar.id)); const firstSidecarIndex = rootChildren.findIndex((id) => sidecarIds.has(id)); const retained = rootChildren.filter((id) => !sidecarIds.has(id)); const insertionIndex = firstSidecarIndex < 0 ? retained.length : rootChildren.slice(0, firstSidecarIndex).filter((id) => !sidecarIds.has(id)).length; const sequence = [];
+      state.order.forEach((id, index) => { if (index) { const separatorId = `separator-${Date.now()}-${index}`; draft.nodes[separatorId] = { type:'separator' }; sequence.push(separatorId); } sequence.push(id); });
+      retained.splice(insertionIndex, 0, ...sequence); draft.nodes[draft.root].children = retained;
+      return hideCredits(applyTheme(ensureEndSeparator(normalizeNavigationNodes(draft))));
+    }
+    const mergedChildren = [...(draft.nodes[parent.id].children || [])]; state.order.slice(1).forEach((id) => mergedChildren.push(...(draft.nodes[id].children || [])));
+    draft.nodes[parent.id].children = mergedChildren;
+    if (Array.isArray(rootChildren)) draft.nodes[draft.root].children = rootChildren.filter(id => id === parent.id || !state.sidecars.some(s => s.id === id));
+    state.sidecars.filter(s => s.id !== parent.id).forEach(s => { delete draft.nodes[s.id]; });
+    return hideCredits(applyTheme(ensureEndSeparator(normalizeNavigationNodes(draft))));
+  }
+  function replaceSourceIds(value, idMap, resourceMap) {
+    if (typeof value === 'string') {
+      let result = idMap.get(value) || value;
+      resourceMap.forEach((replacement, source) => { result = result.split(source).join(replacement); });
+      return result;
+    }
+    if (Array.isArray(value)) return value.map((entry) => replaceSourceIds(entry, idMap, resourceMap));
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, replaceSourceIds(child, idMap, resourceMap)]));
+    return value;
+  }
+  function rewriteResourceUrls(value, sourceItemId, targetItemId, prefix, resources) {
+    if (typeof value === 'string') {
+      let result = value;
+      const sourcePath = `/content/items/${sourceItemId}/resources/`;
+      const targetPath = `/content/items/${targetItemId}/resources/`;
+      if (result.includes(sourcePath)) result = result.split(sourcePath).join(targetPath);
+      resources.filter((resource) => isTransferableResource(resource.resource)).forEach((resource) => {
+        const sourceName = resource.resource;
+        const targetName = `${prefix}${sourceName}`;
+        result = result.split(`/${encodeURIComponent(sourceName)}`).join(`/${encodeURIComponent(targetName)}`);
+        result = result.split(`/${sourceName}`).join(`/${targetName}`);
+      });
+      return result;
+    }
+    if (Array.isArray(value)) return value.map((entry) => rewriteResourceUrls(entry, sourceItemId, targetItemId, prefix, resources));
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, rewriteResourceUrls(child, sourceItemId, targetItemId, prefix, resources)]));
+    return value;
+  }
+  function sourceResourceNameFromUrl(url, resources) {
+    if (typeof url !== 'string') return '';
+    let decoded = url;
+    try { decoded = decodeURIComponent(url); } catch { /* Keep the original URL when decoding fails. */ }
+    const names = resources.map((resource) => resource.resource); const direct = names.find((name) => decoded.includes(`/resources/${name}`) || decoded.endsWith(`/${name}`)); if (direct) return direct;
+    const basename = decoded.split('?')[0].split('#')[0].split('/').pop(); return names.find((name) => name === basename || name.endsWith(`/${basename}`)) || '';
+  }
+  const resourceFolder = '';
+  function convertCopiedImageResources(target, source, prefix) {  
+    Object.keys(source.draft.resources || {}).forEach((id) => {  
+      const copiedId = `${prefix}${id}`; const resource = target.resources?.[copiedId];  
+      if (!resource || resource.type !== 'image') return;  
+      if (resource.data?.provider === 'item-resource' && resource.data?.resourceId) {  
+        const originalName = String(resource.data.resourceId).replace(/^images\//, '').replace(/^resources\//, '');  
+        resource.data.resourceId = originalName.startsWith(prefix) ? originalName : `${prefix}${originalName}`;  
+        return;  
+      }  
+      if (resource.data?.provider !== 'uri' || !resource.data?.src) return;  
+      const sourceName = sourceResourceNameFromUrl(resource.data.src, source.resources || []); if (!sourceName) return;  
+      resource.data = { ...resource.data, provider: 'item-resource', resourceId: `${prefix}${sourceName}` }; delete resource.data.src;  
+    });  
+  }  
+  function imageResourceFileName(resourceId, prefix, contentType) {
+    const extension = String(contentType || '').split('/')[1]?.split(';')[0] || 'bin';
+    return `${prefix}${String(resourceId || 'image').replace(/[^a-z0-9-]/gi, '-')}.${extension}`;
+  }
+  function authenticatedResourceUrl(url) {
+    const parsed = new URL(url, location.href); if (state.token && parsed.hostname.toLowerCase().includes('arcgis.com')) parsed.searchParams.set('token', state.token); return parsed.href;
+  }
+  async function uploadUriImageResources(target, source, prefix, owner, targetItemId, expectedNames) {
+    const folder = resourceFolder;
+    for (const [id, resource] of Object.entries(source.draft.resources || {})) {
+      if (resource?.type !== 'image' || resource.data?.provider !== 'uri' || !resource.data?.src) continue;
+      const response = await fetch(authenticatedResourceUrl(resource.data.src)); if (!response.ok) throw new Error(`Could not download image resource ${id} (${response.status}).`);
+      const blob = await response.blob(); const fileName = imageResourceFileName(id, prefix, blob.type); const form = new FormData(); form.append('file', blob, fileName); form.append('fileName', fileName); if (folder) form.append('resourcesPrefix', folder); form.append('access', 'private'); form.append('f', 'json'); form.append('token', state.token);
+      const added = await api(`${restRoot()}/content/users/${encodeURIComponent(owner)}/items/${targetItemId}/addResources`, { method:'POST', body:form }); if (!added.success) throw new Error(`ArcGIS did not confirm image resource ${fileName}.`);
+      const copiedId = `${prefix}${id}`; if (target.resources?.[copiedId]) { target.resources[copiedId].data = { ...target.resources[copiedId].data, provider: 'item-resource', resourceId: folder ? `${folder}/${fileName}` : fileName }; delete target.resources[copiedId].data.src; }
+      expectedNames.push(folder ? `${folder}/${fileName}` : fileName);
+    }
+  }
+  async function verifyDraftImageResources(itemId, draftResource) {
+    const [inventory, draft] = await Promise.all([
+      api(withAuth(`${restRoot()}/content/items/${itemId}/resources`, { num: '1000', start: '1' })),
+      api(withAuth(`${restRoot()}/content/items/${itemId}/resources/${encodeURIComponent(draftResource)}`))
+    ]);
+    const names = new Set((inventory.resources || []).map((resource) => resource.resource));
+    const missing = Object.values(draft.resources || {}).filter((resource) => resource?.type === 'image' && resource.data?.provider === 'item-resource' && resource.data?.resourceId && !names.has(resource.data.resourceId)).map((resource) => resource.data.resourceId);
+    if (missing.length) throw new Error(`The new draft references image resources that are not present: ${[...new Set(missing)].join(', ')}`);
+  }
+  function rewriteCopiedSourceResources(target, source, targetItemId, prefix) {
+    const sourceNodes = source.draft.nodes || {}; const copiedIds = new Set();
+    const visit = (id) => { if (copiedIds.has(id) || !sourceNodes[id]) return; copiedIds.add(id); (sourceNodes[id].children || []).forEach(visit); };
+    source.sidecars.forEach((sidecar) => visit(sidecar.id));
+    copiedIds.forEach((id) => {
+      const copiedId = `${prefix}${id}`;
+      if (target.nodes?.[copiedId]) target.nodes[copiedId] = rewriteResourceUrls(target.nodes[copiedId], source.item.id, targetItemId, prefix, source.resources);
+    });
+    Object.keys(source.draft.resources || {}).forEach((id) => {
+      const copiedId = `${prefix}${id}`;
+      if (target.resources?.[copiedId]) target.resources[copiedId] = rewriteResourceUrls(target.resources[copiedId], source.item.id, targetItemId, prefix, source.resources);
+    });
+    convertCopiedImageResources(target, source, prefix);
+  }
+  function isTransferableResource(resource) { return !/^(?:draft(?:_\d+)?\.json|published_data\.json|oembed\.(?:json|xml))$/i.test(resource); }
+  function sourceResourceNames(source) {
+    const names = new Set((source.resources || []).map((resource) => resource.resource).filter(isTransferableResource));
+    Object.values(source.draft.resources || {}).forEach((resource) => {
+      if (resource?.type === 'image' && resource.data?.provider === 'item-resource' && isTransferableResource(resource.data.resourceId)) names.add(resource.data.resourceId);
+    });
+    return [...names];
+  }
+  function appendSourceDraft(target, source, prefix) {
+    const sourceNodes = source.draft.nodes || {}; const keep = new Set();
+    const visit = (id) => { if (keep.has(id) || !sourceNodes[id]) return; keep.add(id); (sourceNodes[id].children || []).forEach(visit); };
+    source.sidecars.forEach((sidecar) => visit(sidecar.id));
+    const nodeIdMap = new Map([...keep].map((id) => [id, `${prefix}${id}`])); const sourceResources = source.draft.resources || {}; const resourceIdMap = new Map(Object.keys(sourceResources).map((id) => [id, `${prefix}${id}`])); const idMap = new Map([...nodeIdMap, ...resourceIdMap]);
+    const resourceMap = new Map((source.resources || []).filter((resource) => isTransferableResource(resource.resource)).map((resource) => [resource.resource, `${prefix}${resource.resource}`]));
+    [...keep].forEach((id) => { target.nodes[nodeIdMap.get(id)] = replaceSourceIds(sourceNodes[id], idMap, resourceMap); });
+    target.resources = target.resources || {}; Object.entries(sourceResources).forEach(([id, resource]) => { target.resources[resourceIdMap.get(id)] = replaceSourceIds(resource, idMap, resourceMap); });
+    return source.sidecars.map((sidecar) => nodeIdMap.get(sidecar.id));
+  }
+  function draftTypeKeywords(sourceKeywords, draftResource) {
+    const keywords = Array.isArray(sourceKeywords) ? sourceKeywords : String(sourceKeywords || '').split(',').map((keyword) => keyword.trim());
+    const preserved = keywords.filter((keyword) => keyword && !/^smstatuspublished$|^smstatusunpublishedchanges$|^smpublisheddate:|^smversionpublished:|^smdraftresourceid:|^smstatusdraft$|^unpublished$/.test(keyword));
+    return [...new Set([...preserved, 'smstatusdraft', 'unpublished', `smdraftresourceid:${draftResource}`])];
+  }
+
+
+  $('load').onclick = async () => {
+    try {
+      state.portal = portalRoot(); state.clientId = $('clientId').value.trim(); const itemIds = readItemIds(); if (!itemIds.length || itemIds.some((itemId) => !/^[A-Za-z0-9_-]{32}$/.test(itemId))) throw new Error('Enter one or more valid ArcGIS item IDs.');
+      persistItemIds(); setStatus($('authStatus'), `Loading ${itemIds.length} draft${itemIds.length === 1 ? '' : 's'}…`);
+      state.items = await Promise.all(itemIds.map(async (itemId) => {
+        const item = await api(withAuth(`${restRoot()}/content/items/${itemId}`));
+        const resourcesResponse = await api(withAuth(`${restRoot()}/content/items/${itemId}/resources`, { num: '100', start: '1' }));
+        const resources = resourcesResponse.resources || []; const drafts = resources.filter((resource) => /^draft(?:_\d+)?\.json$/.test(resource.resource)).sort((a,b) => b.resource.localeCompare(a.resource, undefined, {numeric:true}));
+        if (!drafts.length) throw new Error(`No draft resource was found for ${itemId}.`); const draftResource = drafts[0].resource;
+        const draftResponse = await fetch(withAuth(`${restRoot()}/content/items/${itemId}/resources/${encodeURIComponent(draftResource)}`), { method: 'POST' }); const raw = await draftResponse.text();
+        let draft; try { draft = JSON.parse(raw); } catch { throw new Error(`The selected draft resource for ${itemId} was not valid JSON.`); }
+        const sidecars = getSidecars(draft); if (!sidecars.length) throw new Error(`No sidecars were found in ${itemId}.`); return { item, resources, draft, draftResource, sidecars };
+      }));
+      const first = state.items[0]; state.item = first.item; state.draftResource = first.draftResource; state.draft = structuredClone(first.draft);
+      state.items.slice(1).forEach((source, index) => { const ids = appendSourceDraft(state.draft, source, `source${index + 1}_`); const rootChildren = state.draft.nodes[state.draft.root]?.children || []; state.draft.nodes[state.draft.root].children = [...rootChildren, ...ids]; });
+      state.sidecars = getSidecars(state.draft); state.order = state.sidecars.map((sidecar) => sidecar.id); state.parentId = state.order[0];
+      $('storyMeta').innerHTML = `<span><strong>${escapeHtml(first.item.title || itemIds[0])}</strong></span><span>${itemIds.length} source stor${itemIds.length === 1 ? 'y' : 'ies'}</span><span>${state.sidecars.length} sidecars found</span><span>Output will be a new StoryMap</span>`; $('storyMeta').classList.remove('hidden'); renderSidecars(); renderOrder(); $('workspace').classList.remove('hidden'); $('arrangement').classList.remove('hidden'); $('save').disabled = false; setStatus($('authStatus'), 'Drafts loaded. Arrange the sidecars; saving creates a new StoryMap.', 'ok');
+    } catch (e) { setStatus($('authStatus'), e.message, 'error'); }
+  };
+
+  $('save').onclick = async () => {
+    if (!confirm('Create a new StoryMap with the merged sidecars? The source StoryMaps will not be changed.')) return;
+    try {
+      let merged = buildMergedDraft(); const self = await api(withAuth(`${restRoot()}/community/self`)); const owner = self.username; const nextName = `draft_${Date.now()}.json`; const outputTitle = `${state.item.title || 'StoryMap'} — Consolidated`; const itemParams = new URLSearchParams({ f:'json', token:state.token, title:outputTitle, type:state.item.type || 'StoryMap', typeKeywords:draftTypeKeywords(state.item.typeKeywords, nextName).join(','), description:state.item.description || '', tags:state.item.tags || '', snippet:state.item.snippet || '', access:'private' });
+      setStatus($('mergeStatus'), 'Creating a new StoryMap…'); const created = await api(`${restRoot()}/content/users/${encodeURIComponent(owner)}/addItem`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:itemParams }); if (!created.success || !created.id) throw new Error('ArcGIS did not confirm the new StoryMap.'); state.outputItem = created; const expectedResourceNames = [];
+      for (let index = 0; index < state.items.length; index += 1) {
+        const source = state.items[index]; const prefix = index ? `source${index}_` : '';
+        for (const resourceName of sourceResourceNames(source)) {
+          const name = `${prefix}${resourceName}`; const storedName = resourceFolder ? `${resourceFolder}/${name}` : name; expectedResourceNames.push(storedName); const response = await fetch(withAuth(`${restRoot()}/content/items/${source.item.id}/resources/${encodeURIComponent(resourceName)}`)); if (!response.ok) throw new Error(`Could not download ${resourceName} (${response.status}).`); const blob = await response.blob(); const form = new FormData(); form.append('file', blob, name); form.append('fileName', name); if (resourceFolder) form.append('resourcesPrefix', resourceFolder); form.append('access', 'private'); form.append('f', 'json'); form.append('token', state.token); const addedResource = await api(`${restRoot()}/content/users/${encodeURIComponent(owner)}/items/${created.id}/addResources`, { method:'POST', body:form }); if (!addedResource.success) throw new Error(`ArcGIS did not confirm resource ${storedName}.`);
+        }
+        await uploadUriImageResources(merged, source, prefix, owner, created.id, expectedResourceNames);
+      }
+      state.items.forEach((source, index) => rewriteCopiedSourceResources(merged, source, created.id, index ? `source${index}_` : ''));
+      const copiedResources = await api(withAuth(`${restRoot()}/content/items/${created.id}/resources`, { num: '1000', start: '1' })); const copiedNames = new Set((copiedResources.resources || []).map((resource) => resource.resource)); const missingResources = expectedResourceNames.filter((name) => !copiedNames.has(name)); if (missingResources.length) throw new Error(`The new StoryMap is missing copied resources: ${missingResources.join(', ')}`);
+      const form = new FormData(); form.append('file', new Blob([JSON.stringify(merged, null, 2)], {type:'application/json'}), nextName); form.append('fileName', nextName); form.append('access', 'private'); form.append('f', 'json'); form.append('token', state.token);
+      setStatus($('mergeStatus'), `Uploading ${nextName} to the new StoryMap…`); const added = await api(`${restRoot()}/content/users/${encodeURIComponent(owner)}/items/${created.id}/addResources`, { method: 'POST', body: form }); if (!added.success) throw new Error('ArcGIS did not confirm the new draft resource.'); await verifyDraftImageResources(created.id, nextName);
+      const keywords = draftTypeKeywords(state.item.typeKeywords, nextName); const updated = await api(`${restRoot()}/content/users/${encodeURIComponent(owner)}/items/${created.id}/update`, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams({ f:'json', token:state.token, access:'private', typeKeywords:keywords.join(',') }) }); if (!updated.success) throw new Error('ArcGIS did not confirm the private draft metadata.');
+      const verified = await api(withAuth(`${restRoot()}/content/items/${created.id}`)); if (verified.access !== 'private' || !verified.typeKeywords.includes('smstatusdraft') || !verified.typeKeywords.includes('unpublished') || !verified.typeKeywords.includes(`smdraftresourceid:${nextName}`) || verified.typeKeywords.includes('smstatuspublished')) throw new Error('The new StoryMap did not remain private and in draft state.');
+      state.draftResource = nextName; state.draft = merged; setStatus($('mergeStatus'), `Created ${outputTitle} (${created.id}). Source StoryMaps were not changed.`, 'ok'); $('save').disabled = true;
+    } catch (e) { setStatus($('mergeStatus'), e.message, 'error'); }
+  };
+  $('portal').value = localStorage.getItem('smx-sidecar-portal') || $('portal').value;
+  $('clientId').value = localStorage.getItem('smx-sidecar-client-id') || $('clientId').value;
+  const savedItemIds = JSON.parse(localStorage.getItem('smx-sidecar-item-ids') || '[]'); (savedItemIds.length ? savedItemIds : ['']).forEach((itemId) => addItemIdInput(itemId));
+  $('redirectUri').value = localStorage.getItem('smx-sidecar-redirect') || location.href.split('#')[0];
+  $('portal').oninput = () => localStorage.setItem('smx-sidecar-portal', $('portal').value.trim());
+  $('clientId').oninput = () => localStorage.setItem('smx-sidecar-client-id', $('clientId').value.trim());
+
+  $('redirectUri').oninput = () => localStorage.setItem('smx-sidecar-redirect', $('redirectUri').value.trim());
+  handleOAuthCallback(); state.token = state.token || sessionStorage.getItem('smx-sidecar-token'); updateAuthUi();
+})();
+</script>
+</body>
+</html>
